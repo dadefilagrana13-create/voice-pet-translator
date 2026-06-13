@@ -1,2 +1,176 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>Voice Pet Translator</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/><style>body{font-family:'Inter',sans-serif;}</style></head><script src="config.js"></script>
-<body class="bg-gray-950 text-white min-h-screen"><nav class="border-b border-gray-800 px-6 py-4 flex items-center justify-between"><div class="flex items-center gap-2"><span class="text-2xl">🐾</span><span class="font-bold text-xl">Voice Pet Translator</span></div><div class="flex gap-2"><button onclick="showTab('translate')" class="tab-btn px-3 py-2 rounded-lg text-sm bg-amber-500 text-black font-bold" data-tab="translate">Translate</button><button onclick="showTab('history')" class="tab-btn px-3 py-2 rounded-lg text-sm text-gray-400" data-tab="history">History</button></div></nav><div id="tab-translate" class="p-6 max-w-2xl mx-auto"><h1 class="text-3xl font-black mb-4 text-center">What is your pet saying? 🐶</h1><div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-4"><select id="pet-type" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"><option>Dog 🐶</option><option>Cat 🐱</option><option>Bird 🦜</option><option>Rabbit 🐰</option></select><select id="sound-type" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm"><option>Barking</option><option>Whining</option><option>Growling</option><option>Purring</option><option>Howling</option><option>Silent but restless</option></select><textarea id="situation" rows="4" placeholder="Describe the situation in detail..." class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-amber-500"></textarea><button onclick="translate()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl text-lg">🔊 Translate Now</button></div><div id="result-box" class="hidden mt-4 bg-gray-900 border border-amber-700 rounded-2xl p-6"><p class="font-bold text-amber-400 mb-2" id="res-emotion">—</p><div id="res-translation" class="text-sm text-gray-200 italic mb-3 bg-gray-800 rounded-xl p-4"></div><div id="res-advice" class="text-sm text-gray-300"></div></div></div><div id="tab-history" class="p-6 hidden"><h1 class="text-2xl font-bold mb-4">Translation History 📝</h1><div id="history-list" class="space-y-3 max-w-2xl"></div></div><script>const SUPABASE_URL='https://nmulrsbqdeqokvrybapn.supabase.co';const SUPABASE_KEY=window.APP_CONFIG?.SUPABASE_KEY||'';const GROQ_KEY=window.APP_CONFIG?.GROQ_KEY||'';const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);function showTab(tab){document.querySelectorAll('[id^="tab-"]').forEach(el=>el.classList.add('hidden'));document.getElementById('tab-'+tab).classList.remove('hidden');document.querySelectorAll('.tab-btn').forEach(btn=>{btn.classList.remove('bg-amber-500','text-black','font-bold');btn.classList.add('text-gray-400');});const a=document.querySelector(`[data-tab="${tab}"]`);a.classList.add('bg-amber-500','text-black','font-bold');a.classList.remove('text-gray-400');if(tab==='history')loadHistory();}async function translate(){const petType=document.getElementById('pet-type').value,sound=document.getElementById('sound-type').value,situation=document.getElementById('situation').value;const el=document.getElementById('result-box');el.classList.remove('hidden');document.getElementById('res-emotion').textContent='Analyzing...';const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':`Bearer ${GROQ_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:`You are an animal behaviorist. Analyze this pet behavior:\nPet: ${petType}\nSound: ${sound}\nSituation: ${situation}\n\nRespond in JSON: {"emotion":"primary emotion","confidence":85,"translation":"What your pet says in 1st person (2 sentences)","advice":"2 practical owner tips"}`}],max_tokens:300})});const data=await res.json();try{const text=data.choices[0].message.content;const json=JSON.parse(text.match(/\{[\s\S]*\}/)[0]);document.getElementById('res-emotion').textContent=json.emotion+' · '+json.confidence+'% confidence';document.getElementById('res-translation').innerHTML=`"${json.translation}"`;document.getElementById('res-advice').innerHTML=`<p class="font-semibold text-amber-400 mb-1">💡 Tip:</p><p>${json.advice}</p>`;await sb.from('vpt_translations').insert([{pet_type:petType,sound,situation,emotion:json.emotion,translation:json.translation,confidence:json.confidence}]);}catch(e){document.getElementById('res-emotion').textContent='Analysis complete';document.getElementById('res-translation').textContent=data.choices[0].message.content;}}async function loadHistory(){const{data}=await sb.from('vpt_translations').select('*').order('created_at',{ascending:false}).limit(20);document.getElementById('history-list').innerHTML=(data||[]).map(t=>`<div class="bg-gray-900 border border-gray-800 rounded-xl p-4"><p class="font-medium text-amber-400">${t.emotion}</p><p class="text-sm text-gray-300 italic mt-1">"${t.translation}"</p><p class="text-xs text-gray-500 mt-1">${t.pet_type} · ${new Date(t.created_at).toLocaleDateString()}</p></div>`).join('')||'<p class="text-gray-500">No translations yet.</p>';}</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Pet Translator — Understand Your Pet</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  body{font-family:'Inter',system-ui,sans-serif;background:#060d14;color:#e2e8f0}
+  .glass{background:rgba(255,255,255,.04);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.08)}
+  .gradient-text{background:linear-gradient(135deg,#f59e0b,#10b981,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .btn{background:linear-gradient(135deg,#f59e0b,#10b981);border:none;padding:12px 28px;border-radius:12px;cursor:pointer;font-weight:700;color:white;transition:all .2s}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(245,158,11,.3)}
+  input,textarea,select{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#e2e8f0;width:100%}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:#f59e0b}
+  .translation-card{background:linear-gradient(145deg,rgba(245,158,11,.08),rgba(16,185,129,.05));border:1px solid rgba(245,158,11,.25);border-radius:16px;padding:22px;transition:all .3s}
+  .translation-card:hover{border-color:rgba(245,158,11,.5);transform:translateY(-2px)}
+  .emotion-badge{padding:4px 14px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid}
+  .pet-icon{font-size:64px;display:block;text-align:center;margin-bottom:16px;filter:drop-shadow(0 0 20px rgba(245,158,11,.4))}
+</style>
+</head>
+<body>
+<nav class="glass sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-emerald-500 flex items-center justify-center text-xl">🐾</div>
+    <div><h1 class="font-black text-xl gradient-text">Voice Pet Translator</h1><p class="text-xs text-slate-400">Understand what your pet is saying</p></div>
+  </div>
+  <div class="flex gap-3 text-sm">
+    <div class="glass rounded-lg px-3 py-1.5"><span id="total-translations" class="font-bold text-amber-400">0</span> <span class="text-slate-400">translations</span></div>
+  </div>
+</nav>
+
+<div class="max-w-5xl mx-auto px-6 py-10">
+  <!-- Hero -->
+  <div class="text-center mb-12">
+    <span class="pet-icon">🐶</span>
+    <h2 class="text-4xl font-black gradient-text mb-3">What is your pet saying?</h2>
+    <p class="text-slate-400 text-lg">Describe your pet's sounds and behavior — AI translates their emotions</p>
+  </div>
+
+  <!-- Translator -->
+  <div class="grid grid-cols-2 gap-8 mb-12">
+    <div class="glass rounded-2xl p-6 space-y-4">
+      <h3 class="font-bold text-lg mb-4"><i class="fas fa-microphone text-amber-400 mr-2"></i>Describe the Sound</h3>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Pet Type</label>
+          <select id="t-pet">
+            <option>Dog 🐶</option><option>Cat 🐱</option><option>Bird 🦜</option>
+            <option>Hamster 🐹</option><option>Rabbit 🐰</option><option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 mb-1 block">Pet Name (optional)</label>
+          <input id="t-name" placeholder="e.g. Max, Luna...">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Sound Description</label>
+        <select id="t-sound">
+          <option>Barking loudly</option>
+          <option>Whining/whimpering</option>
+          <option>Growling low</option>
+          <option>High-pitched yelp</option>
+          <option>Meowing repeatedly</option>
+          <option>Purring</option>
+          <option>Hissing</option>
+          <option>Chirping</option>
+          <option>Silent but staring</option>
+          <option>Scratching and whining</option>
+          <option>Howling</option>
+          <option>Grumbling</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Situation / Context</label>
+        <select id="t-situation">
+          <option>At home, normal day</option>
+          <option>When I come home</option>
+          <option>At feeding time</option>
+          <option>During playtime</option>
+          <option>When left alone</option>
+          <option>Seeing another animal</option>
+          <option>Near a stranger</option>
+          <option>During a car ride</option>
+          <option>At the vet</option>
+          <option>Before sleeping</option>
+          <option>In the middle of the night</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 mb-1 block">Additional Details (optional)</label>
+        <textarea id="t-details" rows="2" placeholder="e.g. tail is wagging, ears back, showing teeth..."></textarea>
+      </div>
+      <button onclick="translatePet()" class="btn w-full text-lg">
+        <i class="fas fa-paw mr-2"></i>Translate!
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div class="glass rounded-2xl p-6 flex flex-col">
+      <h3 class="font-bold text-lg mb-4"><i class="fas fa-comment-dots text-emerald-400 mr-2"></i>Your Pet Says...</h3>
+      <div id="translation-result" class="flex-1 flex flex-col items-center justify-center text-center">
+        <span class="text-6xl mb-4 opacity-30">🐾</span>
+        <p class="text-slate-500">Describe your pet's sound and hit Translate!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-xl font-bold">Translation History</h3>
+      <button onclick="loadHistory()" class="text-sm text-amber-400 hover:text-amber-300 transition-colors"><i class="fas fa-sync mr-1"></i>Refresh</button>
+    </div>
+    <div id="history-grid" class="grid grid-cols-2 gap-4"></div>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 px-6 py-3 rounded-xl font-semibold hidden z-50 text-white"></div>
+
+<script>
+const SUPABASE_URL='https://nmulrsbqdeqokvrybapn.supabase.co'
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tdWxyc2JxZGVxb2t2cnliYXBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODY0NDcsImV4cCI6MjA5NDg2MjQ0N30.iGN_OGVkw0j3VCEi9qUroMbpT37P3UPRUf1cYyqFBys'
+const GROQ_KEY='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'
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
+
+function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className=`fixed bottom-6 right-6 px-6 py-3 rounded-xl font-semibold z-50 text-white ${type==='error'?'bg-red-600':'bg-amber-500'}`;setTimeout(()=>t.classList.add('hidden'),3000)}
+
+function emotionColor(e){const m={Happy:'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',Hungry:'bg-orange-500/20 text-orange-300 border-orange-500/40',Scared:'bg-blue-500/20 text-blue-300 border-blue-500/40',Excited:'bg-green-500/20 text-green-300 border-green-500/40',Anxious:'bg-purple-500/20 text-purple-300 border-purple-500/40',Playful:'bg-pink-500/20 text-pink-300 border-pink-500/40',Angry:'bg-red-500/20 text-red-300 border-red-500/40',Lonely:'bg-slate-500/20 text-slate-300 border-slate-500/40',Tired:'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'};return m[e]||'bg-slate-500/20 text-slate-300 border-slate-500/40'}
+
+async function translatePet(){
+  const pet=document.getElementById('t-pet').value,name=document.getElementById('t-name').value,sound=document.getElementById('t-sound').value,situation=document.getElementById('t-situation').value,details=document.getElementById('t-details').value
+  const res_el=document.getElementById('translation-result')
+  res_el.innerHTML='<div class="text-4xl animate-bounce mb-4">🔍</div><p class="text-amber-400 animate-pulse">Listening to your pet...</p>'
+  try{
+    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+GROQ_KEY},body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:400,messages:[{role:'user',content:`You are an expert animal behaviorist and pet communication specialist. Translate this pet's behavior.\n\nPet: ${pet}${name?' named '+name:''}\nSound: ${sound}\nSituation: ${situation}\n${details?'Details: '+details:''}\n\nRespond in this EXACT JSON format:\n{\n  "emotion": "one word emotion (Happy/Hungry/Scared/Excited/Anxious/Playful/Angry/Lonely/Tired)",\n  "translation": "What your pet is saying in 1-2 sentences, in first person as the pet",\n  "confidence": number between 60-99,\n  "tips": "1 practical tip for the owner in 1 sentence"\n}\n\nOnly respond with the JSON, nothing else.`}]})})
+    const data=await res.json()
+    let result
+    try{result=JSON.parse(data.choices?.[0]?.message?.content||'{}')}catch(e){result={emotion:'Happy',translation:'I seem happy and content!',confidence:75,tips:'Keep spending time with your pet.'}}
+    
+    res_el.innerHTML=`
+      <div class="w-full text-center">
+        <div class="text-6xl mb-4">${pet.includes('Cat')?'😺':pet.includes('Bird')?'🦜':pet.includes('Hamster')?'🐹':pet.includes('Rabbit')?'🐰':'🐶'}</div>
+        <span class="emotion-badge ${emotionColor(result.emotion)}">${result.emotion}</span>
+        <div class="glass rounded-xl p-4 mt-4 text-left">
+          <p class="text-white font-medium text-lg mb-2">"${result.translation}"</p>
+          <div class="flex items-center gap-2 mt-3">
+            <span class="text-xs text-slate-400">AI Confidence:</span>
+            <div class="flex-1 h-1.5 bg-slate-700 rounded-full"><div class="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400" style="width:${result.confidence}%"></div></div>
+            <span class="text-xs font-bold text-amber-400">${result.confidence}%</span>
+          </div>
+        </div>
+        ${result.tips?`<div class="mt-3 text-sm text-emerald-400 glass rounded-lg p-3"><i class="fas fa-lightbulb mr-1"></i>${result.tips}</div>`:''}
+      </div>`
+    
+    await sb.from('vpt_translations').insert({pet_type:pet,pet_name:name||null,sound,situation,emotion:result.emotion,translation:result.translation,confidence:result.confidence,tips:result.tips})
+    showToast('🐾 Translation complete!')
+    loadHistory()
+  }catch(e){res_el.innerHTML='<p class="text-red-400">Error: '+e.message+'</p>'}
+}
+
+async function loadHistory(){
+  const{data}=await sb.from('vpt_translations').select('*').order('created_at',{ascending:false}).limit(20)
+  document.getElementById('total-translations').textContent=data?.length||0
+  const grid=document.getElementById('history-grid')
+  if(!data?.length){grid.innerHTML='<div class="col-span-2 glass rounded-xl p-8 text-center text-slate-400"><span class="text-4xl block mb-3">🐾</span>No translations yet</div>';return}
+  grid.innerHTML=data.map(t=>`<div class="translation-card"><div class="flex justify-between items-start mb-2"><div><span class="font-medium">${t.pet_type||'Pet'}${t.pet_name?' ('+t.pet_name+')':''}</span><span class="ml-2 text-xs emotion-badge ${emotionColor(t.emotion)}">${t.emotion}</span></div><button onclick="deleteT('${t.id}')" class="text-slate-600 hover:text-red-400"><i class="fas fa-trash text-sm"></i></button></div><p class="text-sm text-slate-300 italic">"${t.translation}"</p><p class="text-xs text-slate-500 mt-1">${t.sound} · ${t.situation}</p>${t.tips?`<p class="text-xs text-emerald-400 mt-2"><i class="fas fa-lightbulb mr-1"></i>${t.tips}</p>`:''}</div>`).join('')
+}
+
+async function deleteT(id){await sb.from('vpt_translations').delete().eq('id',id);loadHistory()}
+loadHistory()
+</script>
+</body>
+</html>
